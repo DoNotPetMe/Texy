@@ -29,6 +29,13 @@ namespace Texy
         public AiResponseFormat AiResponse = AiResponseFormat.OpenAI;
         public int AiTimeoutSeconds = 180;
 
+        // ---- AI retexture (img2img) ----
+        // When on, the AI restyles the avatar's *existing* albedo instead of generating from scratch.
+        // This preserves the UV layout & hidden seams, which is what avatars need. SD-WebUI only.
+        public bool AiRetexture = false;
+        // 0.2 = barely change (keep original), 0.9 = heavy restyle (drifts from layout). 0.5-0.6 is the sweet spot.
+        public float AiDenoise = 0.55f;
+
         public enum AiResponseFormat
         {
             /// <summary>{ "data": [ { "b64_json": "..." } ] } or { "data": [ { "url": "..." } ] }</summary>

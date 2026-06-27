@@ -290,6 +290,27 @@ namespace Texy
                     _settings.AiApiKey = EditorGUILayout.PasswordField(new GUIContent("API key", "Stored locally in EditorPrefs, never committed."), _settings.AiApiKey);
                     _settings.AiTimeoutSeconds = EditorGUILayout.IntSlider("Timeout (s)", _settings.AiTimeoutSeconds, 30, 600);
                     EditorGUILayout.LabelField("Data maps (normal/AO/...) are derived from an AI albedo.", TexyStyles.Hint);
+
+                    if (_settings.AiResponse == TexySettings.AiResponseFormat.SDWebUI)
+                    {
+                        EditorGUILayout.Space(2);
+                        _settings.AiRetexture = EditorGUILayout.Toggle(
+                            new GUIContent("Retexture mode (img2img)", "Restyle the avatar's EXISTING texture instead of generating a new one. Keeps the UV layout & hides seams — recommended for finished avatars."),
+                            _settings.AiRetexture);
+
+                        if (_settings.AiRetexture)
+                        {
+                            _settings.AiDenoise = EditorGUILayout.Slider(
+                                new GUIContent("Denoise (keep ↔ restyle)", "Low keeps the original layout/shading; high restyles more but drifts. 0.5–0.6 is the sweet spot."),
+                                _settings.AiDenoise, 0.2f, 0.9f);
+
+                            bool hasSource = _targetMaterial != null && _targetMaterial.HasProperty("_MainTex") && _targetMaterial.GetTexture("_MainTex") != null;
+                            if (!hasSource)
+                                EditorGUILayout.HelpBox("Assign a Material that already has a main texture — that texture is the base Texy restyles.", MessageType.Warning);
+                            else
+                                EditorGUILayout.LabelField("Base: the material's current main texture.", TexyStyles.Hint);
+                        }
+                    }
                 }
             }
             EditorGUILayout.EndVertical();
@@ -436,7 +457,10 @@ namespace Texy
                 Mesh = _meshContext
             };
 
-            if (_useExistingAlbedo && _targetMaterial != null && _targetMaterial.HasProperty("_MainTex"))
+            // Source albedo feeds both "derive maps from existing" and AI retexture (img2img).
+            bool wantSource = _useExistingAlbedo
+                              || (_settings.ActiveEngine == TexySettings.Engine.AI && _settings.AiRetexture);
+            if (wantSource && _targetMaterial != null && _targetMaterial.HasProperty("_MainTex"))
                 req.SourceAlbedo = _targetMaterial.GetTexture("_MainTex") as Texture2D;
 
             return req;

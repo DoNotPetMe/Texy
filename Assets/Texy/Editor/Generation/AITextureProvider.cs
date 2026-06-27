@@ -49,8 +49,8 @@ namespace Texy
             // Data maps need a base albedo first, then a deterministic CPU derivation.
             if (RequiresDerivation(request.MapType))
             {
-                onProgress?.Invoke(0.05f, "Requesting AI base color...");
-                RequestImage(AugmentPrompt(request.Prompt, MapType.Albedo, style), request,
+                onProgress?.Invoke(0.05f, IsRetexture(request) ? "Restyling existing texture..." : "Requesting AI base color...");
+                RequestImage(BasePrompt(request, style), request,
                     onProgress,
                     albedo =>
                     {
@@ -63,9 +63,12 @@ namespace Texy
                 return;
             }
 
-            // Color maps come directly from the model.
+            // Color maps come directly from the model (albedo may be a retexture restyle).
             onProgress?.Invoke(0.05f, "Contacting AI endpoint...");
-            RequestImage(AugmentPrompt(request.Prompt, request.MapType, style), request,
+            string colorPrompt = request.MapType == MapType.Albedo
+                ? BasePrompt(request, style)
+                : AugmentPrompt(request.Prompt, request.MapType, style);
+            RequestImage(colorPrompt, request,
                 onProgress,
                 tex =>
                 {
@@ -145,14 +148,43 @@ namespace Texy
             return $"{style.Material.ToString().ToLowerInvariant()} surface with a {style.Pattern.ToString().ToLowerInvariant()} pattern";
         }
 
+        /// <summary>True when this request should restyle the existing albedo (img2img) rather than generate a tile.</summary>
+        private bool IsRetexture(TextureRequest req)
+        {
+            return _settings.AiResponse == TexySettings.AiResponseFormat.SDWebUI
+                   && _settings.AiRetexture
+                   && req.SourceAlbedo != null
+                   && (req.MapType == MapType.Albedo || RequiresDerivation(req.MapType));
+        }
+
+        /// <summary>The albedo/base prompt — a restyle instruction in retexture mode, a fresh tile otherwise.</summary>
+        private string BasePrompt(TextureRequest req, PromptParser.TextureStyle style)
+        {
+            if (IsRetexture(req))
+            {
+                string baseDesc = string.IsNullOrWhiteSpace(req.Prompt) ? DescribeStyle(style) : req.Prompt.Trim();
+                return $"{baseDesc}, restyle and recolor this avatar texture, keep the exact same UV layout, " +
+                       "shapes and proportions, preserve placement, add fine surface detail, clean, high quality.";
+            }
+            return AugmentPrompt(req.Prompt, MapType.Albedo, style);
+        }
+
         // ---- networking ----
         private void RequestImage(string prompt, TextureRequest req, Action<float, string> onProgress,
             Action<Texture2D> onImage, Action<string> onError)
         {
             int size = Mathf.Clamp(Mathf.Max(req.Width, req.Height), 256, 2048);
-            string body = BuildRequestBody(prompt, size, req.Tileable);
 
-            var www = new UnityWebRequest(_settings.AiEndpoint, "POST");
+            // Retexture (img2img): restyle the avatar's existing albedo instead of inventing a new
+            // tile, so the UV layout and hidden seams survive. SD-WebUI only; needs a source albedo.
+            bool retexture = IsRetexture(req);
+
+            string url = retexture ? ToImg2ImgEndpoint(_settings.AiEndpoint) : _settings.AiEndpoint;
+            string initImage = retexture ? EncodeBase64(req.SourceAlbedo, size) : null;
+            // A tiling pass would scramble a UV-specific layout, so retexture is never tiled.
+            string body = BuildRequestBody(prompt, size, retexture ? false : req.Tileable, initImage);
+
+            var www = new UnityWebRequest(url, "POST");
             byte[] payload = Encoding.UTF8.GetBytes(body);
             www.uploadHandler = new UploadHandlerRaw(payload);
             www.downloadHandler = new DownloadHandlerBuffer();
@@ -179,11 +211,26 @@ namespace Texy
             "shadow, baked lighting, highlight, gradient lighting, border, frame, watermark, text, signature, " +
             "blurry, lowres, jpeg artifacts, seams, perspective, vignette";
 
-        private string BuildRequestBody(string prompt, int size, bool tileable)
+        private string BuildRequestBody(string prompt, int size, bool tileable, string initImageBase64)
         {
             string escaped = EscapeJson(prompt);
             if (_settings.AiResponse == TexySettings.AiResponseFormat.SDWebUI)
             {
+                if (!string.IsNullOrEmpty(initImageBase64))
+                {
+                    // img2img: the existing texture is the starting point; denoising_strength controls
+                    // how far the restyle drifts from it (low = keep layout, high = more creative).
+                    return "{" +
+                           $"\"init_images\":[\"{initImageBase64}\"]," +
+                           $"\"denoising_strength\":{_settings.AiDenoise.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
+                           $"\"resize_mode\":0," +
+                           $"\"prompt\":\"{escaped}\"," +
+                           $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
+                           $"\"steps\":30,\"cfg_scale\":7,\"sampler_name\":\"Euler a\"," +
+                           $"\"width\":{size},\"height\":{size}" +
+                           "}";
+                }
+
                 // Automatic1111 / Forge: "tiling" makes the result seamless, which is exactly what
                 // avatar body/clothing atlases need. "Euler a" is universally available across versions.
                 return "{" +
@@ -281,6 +328,27 @@ namespace Texy
             tex.SetPixels(pixels);
             tex.Apply(true);
             return tex;
+        }
+
+        /// <summary>PNG-encode any texture (even non-readable) at the requested size into base64 for img2img init.</summary>
+        private static string EncodeBase64(Texture2D src, int size)
+        {
+            var pixels = MapPostProcessor.ReadResized(src, size, size);
+            var t = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            t.SetPixels(pixels);
+            t.Apply();
+            byte[] png = t.EncodeToPNG();
+            UnityEngine.Object.DestroyImmediate(t);
+            return Convert.ToBase64String(png);
+        }
+
+        /// <summary>Point a configured txt2img URL at the matching img2img endpoint.</summary>
+        private static string ToImg2ImgEndpoint(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+            if (url.Contains("txt2img")) return url.Replace("txt2img", "img2img");
+            if (url.Contains("img2img")) return url;
+            return url.TrimEnd('/') + "/sdapi/v1/img2img";
         }
 
         // ---- tiny JSON utilities (no external dependency) ----
