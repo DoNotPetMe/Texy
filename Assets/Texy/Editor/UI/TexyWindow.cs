@@ -46,6 +46,15 @@ namespace Texy
         private bool _showAiSettings;
         private bool _showAdvanced;
 
+        // Installed ControlNet models, fetched on demand from the SD-WebUI API.
+        private string[] _cnModels;
+        private string _cnStatus;
+
+        private static readonly string[] CnModules =
+        {
+            "tile_resample", "lineart_realistic", "lineart_standard", "canny", "none"
+        };
+
         // ---- runtime ----
         private bool _isGenerating;
         private float _progress;
@@ -323,6 +332,8 @@ namespace Texy
                                     MessageType.Error);
                             else
                                 EditorGUILayout.LabelField($"Base: {src.name} ({src.width}×{src.height}).", TexyStyles.Hint);
+
+                            DrawControlNetUI();
                         }
 
                         EditorGUILayout.Space(2);
@@ -336,6 +347,75 @@ namespace Texy
                 }
             }
             EditorGUILayout.EndVertical();
+        }
+
+        private void DrawControlNetUI()
+        {
+            EditorGUILayout.Space(2);
+            _settings.AiControlNet = EditorGUILayout.Toggle(
+                new GUIContent("ControlNet (lock structure)", "Keeps the source's structure while allowing high denoise, so the restyle gains real detail. Requires the sd-webui-controlnet extension + a tile/lineart model."),
+                _settings.AiControlNet);
+
+            if (!_settings.AiControlNet) return;
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                // Module (preprocessor).
+                int modIdx = Mathf.Max(0, Array.IndexOf(CnModules, _settings.AiControlNetModule));
+                modIdx = EditorGUILayout.Popup("Preprocessor", modIdx, CnModules);
+                _settings.AiControlNetModule = CnModules[Mathf.Clamp(modIdx, 0, CnModules.Length - 1)];
+
+                // Model — dropdown once fetched, text field otherwise.
+                if (_cnModels != null && _cnModels.Length > 0)
+                {
+                    int mi = Mathf.Max(0, Array.IndexOf(_cnModels, _settings.AiControlNetModel));
+                    mi = EditorGUILayout.Popup("Model", mi, _cnModels);
+                    _settings.AiControlNetModel = _cnModels[Mathf.Clamp(mi, 0, _cnModels.Length - 1)];
+                }
+                else
+                {
+                    _settings.AiControlNetModel = EditorGUILayout.TextField(
+                        new GUIContent("Model", "Exact installed model name, e.g. control_v11f1e_sd15_tile [a371b31b]. Use Fetch to list them."),
+                        _settings.AiControlNetModel);
+                }
+
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Fetch installed models", EditorStyles.miniButton))
+                    FetchControlNetModels();
+                EditorGUILayout.EndHorizontal();
+
+                _settings.AiControlNetWeight = EditorGUILayout.Slider("ControlNet weight", _settings.AiControlNetWeight, 0f, 2f);
+
+                if (!string.IsNullOrEmpty(_cnStatus))
+                    EditorGUILayout.LabelField(_cnStatus, TexyStyles.Hint);
+
+                EditorGUILayout.HelpBox("Tile + high Denoise (0.75–0.85) is the avatar sweet spot: lots of new detail, structure preserved.", MessageType.Info);
+            }
+        }
+
+        private void FetchControlNetModels()
+        {
+            _cnStatus = "Fetching ControlNet models…";
+            var provider = new AITextureProvider(_settings);
+            provider.FetchControlNetModels(
+                models =>
+                {
+                    _cnModels = models;
+                    _cnStatus = $"Found {models.Length} ControlNet model(s).";
+                    if (string.IsNullOrEmpty(_settings.AiControlNetModel) && models.Length > 0)
+                    {
+                        // Default to a tile model if present (best for avatars), else the first.
+                        string tile = Array.Find(models, m => m.ToLowerInvariant().Contains("tile"));
+                        _settings.AiControlNetModel = tile ?? models[0];
+                    }
+                    Repaint();
+                },
+                err =>
+                {
+                    _cnModels = null;
+                    _cnStatus = err;
+                    Repaint();
+                });
         }
 
         // ---------------------------------------------------------------- actions

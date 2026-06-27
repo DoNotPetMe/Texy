@@ -39,6 +39,14 @@ namespace Texy
         public float AiCfgScale = 8f;
         public int AiSteps = 30;
 
+        // ---- ControlNet (sd-webui-controlnet extension) ----
+        // Locks the source structure while allowing high denoise, so the restyle gains real detail
+        // instead of dissolving into flat color. The control image is the same source albedo.
+        public bool AiControlNet = false;
+        public string AiControlNetModule = "tile_resample"; // preprocessor
+        public string AiControlNetModel = string.Empty;     // install-specific, e.g. "control_v11f1e_sd15_tile [a371b31b]"
+        public float AiControlNetWeight = 0.9f;
+
         public enum AiResponseFormat
         {
             /// <summary>{ "data": [ { "b64_json": "..." } ] } or { "data": [ { "url": "..." } ] }</summary>

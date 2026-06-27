@@ -84,6 +84,16 @@ For best fidelity, drag the avatar's original **PNG or PSD** source art into **S
 compressed in‑game texture — sharper results, fewer artifacts. The source must match that material's UV
 layout (i.e. it's the original art for the same texture). Unity imports PSDs natively, so they work directly.
 
+### ControlNet (best results on avatars)
+
+Flat‑atlas img2img tends to recolor more than it re‑details, and low denoise on dark prompts collapses
+to flat color. Enabling **ControlNet** (in AI settings, under Retexture) fixes this: it locks the
+source's structure as a control image so you can push **Denoise to 0.75–0.85** and gain lots of new
+detail without dissolving the layout. It needs the **sd‑webui‑controlnet** extension plus a tile or
+lineart model installed in Forge; click **Fetch installed models** to populate the dropdown. Tile +
+high denoise is the avatar sweet spot. **Prompt strength (CFG)** and **Steps** are also exposed — raise
+CFG to 9–11 to push prompt adherence and avoid flat results.
+
 Color maps come straight from the model with map‑specific prompt engineering. Data maps
 (normal/AO/height/roughness/metallic) are derived on‑device from an AI‑generated albedo so the whole
 set stays consistent. The API key is stored locally in `EditorPrefs` and is never committed.

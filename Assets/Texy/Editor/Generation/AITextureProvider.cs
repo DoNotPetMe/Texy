@@ -228,6 +228,7 @@ namespace Texy
                            $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
                            $"\"steps\":{_settings.AiSteps},\"cfg_scale\":{F(_settings.AiCfgScale)},\"sampler_name\":\"Euler a\"," +
                            $"\"width\":{size},\"height\":{size}" +
+                           ControlNetFragment(initImageBase64) +
                            "}";
                 }
 
@@ -248,6 +249,58 @@ namespace Texy
                    $"\"prompt\":\"{escaped}\"," +
                    $"\"n\":1,\"size\":\"{size}x{size}\",\"response_format\":\"b64_json\"" +
                    "}";
+        }
+
+        /// <summary>
+        /// Builds the alwayson_scripts.controlnet fragment for the request, reusing the source image as
+        /// the control image. Empty when ControlNet is off or unconfigured (so it never breaks plain runs).
+        /// </summary>
+        private string ControlNetFragment(string controlImageBase64)
+        {
+            if (!_settings.AiControlNet
+                || string.IsNullOrEmpty(_settings.AiControlNetModel)
+                || string.IsNullOrEmpty(controlImageBase64))
+                return string.Empty;
+
+            return ",\"alwayson_scripts\":{\"controlnet\":{\"args\":[{" +
+                   $"\"input_image\":\"{controlImageBase64}\"," +
+                   $"\"module\":\"{EscapeJson(_settings.AiControlNetModule)}\"," +
+                   $"\"model\":\"{EscapeJson(_settings.AiControlNetModel)}\"," +
+                   $"\"weight\":{F(_settings.AiControlNetWeight)}," +
+                   "\"resize_mode\":\"Just Resize\",\"pixel_perfect\":true,\"control_mode\":\"Balanced\"" +
+                   "}]}}";
+        }
+
+        /// <summary>The SD-WebUI server root (without /sdapi/v1/...), used for ControlNet sub-endpoints.</summary>
+        private string ServerBase()
+        {
+            string url = _settings.AiEndpoint ?? string.Empty;
+            int i = url.IndexOf("/sdapi/v1/", StringComparison.Ordinal);
+            return i >= 0 ? url.Substring(0, i) : url.TrimEnd('/');
+        }
+
+        /// <summary>Queries the installed ControlNet models so the UI can offer a dropdown instead of guesswork.</summary>
+        public void FetchControlNetModels(Action<string[]> onModels, Action<string> onError)
+        {
+            string url = ServerBase() + "/controlnet/model_list";
+            var www = UnityWebRequest.Get(url);
+            if (!string.IsNullOrEmpty(_settings.AiApiKey))
+                www.SetRequestHeader("Authorization", "Bearer " + _settings.AiApiKey);
+            www.timeout = 30;
+
+            EditorWebRequest.Send(www, done =>
+            {
+                if (done.result != UnityWebRequest.Result.Success)
+                {
+                    onError?.Invoke($"Could not reach ControlNet API ({done.responseCode}). Is the sd-webui-controlnet extension installed and Forge running? {done.error}");
+                    return;
+                }
+                var models = ExtractStringArray(done.downloadHandler.text, "model_list");
+                if (models.Length == 0)
+                    onError?.Invoke("ControlNet responded but no models are installed. Add a tile/lineart model to the extension's models folder.");
+                else
+                    onModels?.Invoke(models);
+            });
         }
 
         private void HandleResponse(string json, TextureRequest req, Action<float, string> onProgress,
@@ -378,6 +431,41 @@ namespace Texy
                 i++;
             }
             return sb.ToString();
+        }
+
+        /// <summary>Extract every JSON string element of the array following "key" (e.g. model_list).</summary>
+        private static string[] ExtractStringArray(string json, string key)
+        {
+            var results = new System.Collections.Generic.List<string>();
+            if (string.IsNullOrEmpty(json)) return results.ToArray();
+
+            int k = json.IndexOf("\"" + key + "\"", StringComparison.Ordinal);
+            if (k < 0) return results.ToArray();
+            int open = json.IndexOf('[', k);
+            if (open < 0) return results.ToArray();
+
+            int i = open + 1;
+            while (i < json.Length)
+            {
+                char c = json[i];
+                if (c == ']') break;
+                if (c == '"')
+                {
+                    var sb = new StringBuilder();
+                    i++;
+                    while (i < json.Length)
+                    {
+                        char ch = json[i];
+                        if (ch == '\\' && i + 1 < json.Length) { sb.Append(json[i + 1]); i += 2; continue; }
+                        if (ch == '"') break;
+                        sb.Append(ch);
+                        i++;
+                    }
+                    results.Add(sb.ToString());
+                }
+                i++;
+            }
+            return results.ToArray();
         }
 
         private static string StripDataUri(string b64)
