@@ -36,6 +36,9 @@ namespace Texy
         private bool _tileable = true;
         private bool _useExistingAlbedo;
 
+        /// <summary>Optional explicit source art (PNG/PSD) used as the base for retexture / deriving maps.</summary>
+        private Texture2D _sourceOverride;
+
         private readonly Dictionary<MapType, bool> _selectedMaps = new Dictionary<MapType, bool>();
 
         // ---- settings / engine ----
@@ -250,6 +253,12 @@ namespace Texy
                 _tileable = EditorGUILayout.Toggle(new GUIContent("Tileable", "Seamless wrapping for body/clothing atlases."), _tileable);
                 _useExistingAlbedo = EditorGUILayout.Toggle(new GUIContent("Derive from existing albedo", "Build normal/AO/height from the material's current main texture."), _useExistingAlbedo);
 
+                _sourceOverride = (Texture2D)EditorGUILayout.ObjectField(
+                    new GUIContent("Source texture (optional)", "Drag the avatar's original PNG/PSD here to use it as the base for Retexture / deriving maps — higher quality than the in-game texture. Must match this material's UV layout. Empty = use the material's current main texture."),
+                    _sourceOverride, typeof(Texture2D), false);
+                if (_sourceOverride != null)
+                    EditorGUILayout.LabelField($"Using source: {_sourceOverride.name} ({_sourceOverride.width}×{_sourceOverride.height})", TexyStyles.Hint);
+
                 _settings.ApplyToMaterialOnGenerate = EditorGUILayout.Toggle("Apply to material", _settings.ApplyToMaterialOnGenerate);
                 _settings.OutputFolder = EditorGUILayout.TextField("Output folder", _settings.OutputFolder);
             }
@@ -304,11 +313,11 @@ namespace Texy
                                 new GUIContent("Denoise (keep ↔ restyle)", "Low keeps the original layout/shading; high restyles more but drifts. 0.5–0.6 is the sweet spot."),
                                 _settings.AiDenoise, 0.2f, 0.9f);
 
-                            bool hasSource = _targetMaterial != null && _targetMaterial.HasProperty("_MainTex") && _targetMaterial.GetTexture("_MainTex") != null;
-                            if (!hasSource)
-                                EditorGUILayout.HelpBox("Assign a Material that already has a main texture — that texture is the base Texy restyles.", MessageType.Warning);
+                            Texture2D src = ResolveSourceTexture();
+                            if (src == null)
+                                EditorGUILayout.HelpBox("No base texture. Assign a Material with a main texture, or drag the avatar's PNG/PSD into 'Source texture' under Options.", MessageType.Warning);
                             else
-                                EditorGUILayout.LabelField("Base: the material's current main texture.", TexyStyles.Hint);
+                                EditorGUILayout.LabelField($"Base: {src.name} ({src.width}×{src.height}).", TexyStyles.Hint);
                         }
                     }
                 }
@@ -458,12 +467,22 @@ namespace Texy
             };
 
             // Source albedo feeds both "derive maps from existing" and AI retexture (img2img).
+            // Prefer an explicitly supplied PNG/PSD (higher quality) over the material's runtime texture.
             bool wantSource = _useExistingAlbedo
                               || (_settings.ActiveEngine == TexySettings.Engine.AI && _settings.AiRetexture);
-            if (wantSource && _targetMaterial != null && _targetMaterial.HasProperty("_MainTex"))
-                req.SourceAlbedo = _targetMaterial.GetTexture("_MainTex") as Texture2D;
+            if (wantSource)
+                req.SourceAlbedo = ResolveSourceTexture();
 
             return req;
+        }
+
+        /// <summary>The base texture for retexture / map derivation: the explicit override, else the material's main texture.</summary>
+        private Texture2D ResolveSourceTexture()
+        {
+            if (_sourceOverride != null) return _sourceOverride;
+            if (_targetMaterial != null && _targetMaterial.HasProperty("_MainTex"))
+                return _targetMaterial.GetTexture("_MainTex") as Texture2D;
+            return null;
         }
 
         private void OnProgress(float p, string status)

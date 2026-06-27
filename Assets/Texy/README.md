@@ -72,6 +72,18 @@ Switch **Engine** to *AI* and open *AI endpoint settings*:
   *Tileable* checkbox) so results are seamless, plus a texture‑oriented negative prompt. Whatever
   checkpoint is loaded in the WebUI is the model Texy uses.
 
+### Retexture mode & source art
+
+For a finished avatar, generating a fresh tile over its UVs produces visible seams. Enable
+**Retexture mode (img2img)** so Texy restyles the avatar's *existing* texture instead — preserving the
+UV layout, placement and hidden seams. The **Denoise** slider trades "keep the original" (low) against
+"restyle harder" (high); 0.5–0.6 is the sweet spot.
+
+For best fidelity, drag the avatar's original **PNG or PSD** source art into **Source texture
+(optional)** under *Options*. Texy uses that as the img2img base (and for deriving maps) instead of the
+compressed in‑game texture — sharper results, fewer artifacts. The source must match that material's UV
+layout (i.e. it's the original art for the same texture). Unity imports PSDs natively, so they work directly.
+
 Color maps come straight from the model with map‑specific prompt engineering. Data maps
 (normal/AO/height/roughness/metallic) are derived on‑device from an AI‑generated albedo so the whole
 set stays consistent. The API key is stored locally in `EditorPrefs` and is never committed.
