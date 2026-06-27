@@ -316,9 +316,22 @@ namespace Texy
                             Texture2D src = ResolveSourceTexture();
                             if (src == null)
                                 EditorGUILayout.HelpBox("No base texture. Assign a Material with a main texture, or drag the avatar's PNG/PSD into 'Source texture' under Options.", MessageType.Warning);
+                            else if (SourceIsGeneratedOutput(src))
+                                EditorGUILayout.HelpBox(
+                                    $"⚠ The base is a Texy-generated texture ({src.name}). Restyling our own output spirals toward flat color.\n" +
+                                    "Drag the avatar's ORIGINAL albedo into 'Source texture' under Options instead.",
+                                    MessageType.Error);
                             else
                                 EditorGUILayout.LabelField($"Base: {src.name} ({src.width}×{src.height}).", TexyStyles.Hint);
                         }
+
+                        EditorGUILayout.Space(2);
+                        _settings.AiCfgScale = EditorGUILayout.Slider(
+                            new GUIContent("Prompt strength (CFG)", "Higher = follows the prompt harder, more detail/contrast. 8-11 helps avoid flat color."),
+                            _settings.AiCfgScale, 1f, 20f);
+                        _settings.AiSteps = EditorGUILayout.IntSlider(
+                            new GUIContent("Steps", "Sampling steps. 25-35 is a good range."),
+                            _settings.AiSteps, 10, 50);
                     }
                 }
             }
@@ -483,6 +496,19 @@ namespace Texy
             if (_targetMaterial != null && _targetMaterial.HasProperty("_MainTex"))
                 return _targetMaterial.GetTexture("_MainTex") as Texture2D;
             return null;
+        }
+
+        /// <summary>
+        /// True when the resolved retexture source is itself a Texy output. Feeding our own result back
+        /// in spirals toward flat color, so we warn the user to point at the avatar's ORIGINAL texture.
+        /// </summary>
+        private bool SourceIsGeneratedOutput(Texture2D src)
+        {
+            if (src == null) return false;
+            string path = AssetDatabase.GetAssetPath(src);
+            if (string.IsNullOrEmpty(path)) return false;
+            string outFolder = (_settings.OutputFolder ?? string.Empty).Replace("\\", "/").TrimEnd('/');
+            return !string.IsNullOrEmpty(outFolder) && path.Replace("\\", "/").StartsWith(outFolder + "/");
         }
 
         private void OnProgress(float p, string status)

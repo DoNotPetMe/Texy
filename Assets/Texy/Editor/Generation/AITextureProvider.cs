@@ -222,11 +222,11 @@ namespace Texy
                     // how far the restyle drifts from it (low = keep layout, high = more creative).
                     return "{" +
                            $"\"init_images\":[\"{initImageBase64}\"]," +
-                           $"\"denoising_strength\":{_settings.AiDenoise.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
+                           $"\"denoising_strength\":{F(_settings.AiDenoise)}," +
                            $"\"resize_mode\":0," +
                            $"\"prompt\":\"{escaped}\"," +
                            $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
-                           $"\"steps\":30,\"cfg_scale\":7,\"sampler_name\":\"Euler a\"," +
+                           $"\"steps\":{_settings.AiSteps},\"cfg_scale\":{F(_settings.AiCfgScale)},\"sampler_name\":\"Euler a\"," +
                            $"\"width\":{size},\"height\":{size}" +
                            "}";
                 }
@@ -236,7 +236,7 @@ namespace Texy
                 return "{" +
                        $"\"prompt\":\"{escaped}\"," +
                        $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
-                       $"\"steps\":28,\"cfg_scale\":7,\"sampler_name\":\"Euler a\"," +
+                       $"\"steps\":{_settings.AiSteps},\"cfg_scale\":{F(_settings.AiCfgScale)},\"sampler_name\":\"Euler a\"," +
                        $"\"tiling\":{(tileable ? "true" : "false")}," +
                        $"\"width\":{size},\"height\":{size}" +
                        "}";
@@ -385,6 +385,8 @@ namespace Texy
             int comma = b64.IndexOf("base64,", StringComparison.Ordinal);
             return comma >= 0 ? b64.Substring(comma + 7) : b64;
         }
+
+        private static string F(float v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
         private static string EscapeJson(string s)
         {

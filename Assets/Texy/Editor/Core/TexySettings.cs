@@ -35,6 +35,9 @@ namespace Texy
         public bool AiRetexture = false;
         // 0.2 = barely change (keep original), 0.9 = heavy restyle (drifts from layout). 0.5-0.6 is the sweet spot.
         public float AiDenoise = 0.55f;
+        // Higher CFG = follows the prompt harder (more detail/contrast, less drift to flat color). 7-11 typical.
+        public float AiCfgScale = 8f;
+        public int AiSteps = 30;
 
         public enum AiResponseFormat
         {
