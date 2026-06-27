@@ -150,7 +150,7 @@ namespace Texy
             Action<Texture2D> onImage, Action<string> onError)
         {
             int size = Mathf.Clamp(Mathf.Max(req.Width, req.Height), 256, 2048);
-            string body = BuildRequestBody(prompt, size);
+            string body = BuildRequestBody(prompt, size, req.Tileable);
 
             var www = new UnityWebRequest(_settings.AiEndpoint, "POST");
             byte[] payload = Encoding.UTF8.GetBytes(body);
@@ -174,14 +174,24 @@ namespace Texy
                 p => onProgress?.Invoke(0.1f + p * 0.6f, "Generating image..."));
         }
 
-        private string BuildRequestBody(string prompt, int size)
+        // Quality guard-rails for texture work: keep models from baking in lighting, borders or artifacts.
+        private const string TextureNegativePrompt =
+            "shadow, baked lighting, highlight, gradient lighting, border, frame, watermark, text, signature, " +
+            "blurry, lowres, jpeg artifacts, seams, perspective, vignette";
+
+        private string BuildRequestBody(string prompt, int size, bool tileable)
         {
             string escaped = EscapeJson(prompt);
             if (_settings.AiResponse == TexySettings.AiResponseFormat.SDWebUI)
             {
+                // Automatic1111 / Forge: "tiling" makes the result seamless, which is exactly what
+                // avatar body/clothing atlases need. "Euler a" is universally available across versions.
                 return "{" +
                        $"\"prompt\":\"{escaped}\"," +
-                       $"\"steps\":28,\"cfg_scale\":7,\"width\":{size},\"height\":{size}" +
+                       $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
+                       $"\"steps\":28,\"cfg_scale\":7,\"sampler_name\":\"Euler a\"," +
+                       $"\"tiling\":{(tileable ? "true" : "false")}," +
+                       $"\"width\":{size},\"height\":{size}" +
                        "}";
             }
 

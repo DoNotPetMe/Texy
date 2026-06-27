@@ -67,7 +67,10 @@ Switch **Engine** to *AI* and open *AI endpoint settings*:
 
 - **OpenAI‑compatible** (`/v1/images/generations`): set the endpoint, model, and API key. Texy sends
   `response_format: b64_json` and decodes the image (URL responses are downloaded automatically).
-- **SD‑WebUI** (Automatic1111 `/sdapi/v1/txt2img`): set the endpoint; no key needed for local servers.
+- **SD‑WebUI** (Automatic1111 / **Forge** `/sdapi/v1/txt2img`): set the endpoint; no key needed for local
+  servers. This is the recommended free path on a local GPU. Texy passes `tiling` (driven by the
+  *Tileable* checkbox) so results are seamless, plus a texture‑oriented negative prompt. Whatever
+  checkpoint is loaded in the WebUI is the model Texy uses.
 
 Color maps come straight from the model with map‑specific prompt engineering. Data maps
 (normal/AO/height/roughness/metallic) are derived on‑device from an AI‑generated albedo so the whole
