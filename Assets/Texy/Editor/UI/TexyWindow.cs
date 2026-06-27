@@ -343,10 +343,68 @@ namespace Texy
                         _settings.AiSteps = EditorGUILayout.IntSlider(
                             new GUIContent("Steps", "Sampling steps. 25-35 is a good range."),
                             _settings.AiSteps, 10, 50);
+
+                        DrawNegativePromptMenu();
                     }
                 }
             }
             EditorGUILayout.EndVertical();
+        }
+
+        // Common things to exclude, as labelled chips that append their terms to the negative prompt.
+        private static readonly (string label, string terms)[] NegativePresets =
+        {
+            ("Dark colors", "dark, black, gloomy, dim, desaturated, low contrast"),
+            ("Blurry", "blurry, lowres, out of focus, soft focus"),
+            ("Text / logo", "text, watermark, logo, signature, label"),
+            ("Washed out", "washed out, faded, pale, overexposed"),
+            ("Noise / grain", "noise, grain, jpeg artifacts"),
+            ("Lighting baked in", "shadow, baked lighting, highlight, ambient occlusion"),
+        };
+
+        private void DrawNegativePromptMenu()
+        {
+            EditorGUILayout.Space(2);
+            EditorGUILayout.LabelField(new GUIContent("Negative prompt", "Things to keep OUT of the result. Added on top of Texy's built-in quality terms."), EditorStyles.boldLabel);
+
+            _settings.AiNegativePrompt = EditorGUILayout.TextArea(_settings.AiNegativePrompt ?? string.Empty, GUILayout.MinHeight(34));
+
+            EditorGUILayout.LabelField("Quick add:", TexyStyles.Hint);
+            int col = 0;
+            EditorGUILayout.BeginHorizontal();
+            foreach (var preset in NegativePresets)
+            {
+                if (col == 3) { EditorGUILayout.EndHorizontal(); EditorGUILayout.BeginHorizontal(); col = 0; }
+                if (GUILayout.Button(preset.label, EditorStyles.miniButton, GUILayout.Width(110)))
+                    AppendNegative(preset.terms);
+                col++;
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (!string.IsNullOrEmpty(_settings.AiNegativePrompt) && GUILayout.Button("Clear negative", EditorStyles.miniButton))
+                _settings.AiNegativePrompt = string.Empty;
+        }
+
+        /// <summary>Append preset terms without duplicating ones already present.</summary>
+        private void AppendNegative(string terms)
+        {
+            string current = _settings.AiNegativePrompt ?? string.Empty;
+            var existing = new HashSet<string>();
+            foreach (var t in current.Split(','))
+                existing.Add(t.Trim().ToLowerInvariant());
+
+            var toAdd = new List<string>();
+            foreach (var t in terms.Split(','))
+            {
+                string trimmed = t.Trim();
+                if (trimmed.Length > 0 && !existing.Contains(trimmed.ToLowerInvariant()))
+                    toAdd.Add(trimmed);
+            }
+            if (toAdd.Count == 0) return;
+
+            string joined = string.Join(", ", toAdd);
+            _settings.AiNegativePrompt = string.IsNullOrWhiteSpace(current) ? joined : current.TrimEnd().TrimEnd(',') + ", " + joined;
+            GUI.FocusControl(null);
         }
 
         private void DrawControlNetUI()

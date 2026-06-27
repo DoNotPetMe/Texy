@@ -38,6 +38,8 @@ namespace Texy
         // Higher CFG = follows the prompt harder (more detail/contrast, less drift to flat color). 7-11 typical.
         public float AiCfgScale = 8f;
         public int AiSteps = 30;
+        // User-added negative terms, appended to the built-in quality negative. e.g. "dark, black, gloomy".
+        public string AiNegativePrompt = string.Empty;
 
         // ---- ControlNet (sd-webui-controlnet extension) ----
         // Locks the source structure while allowing high denoise, so the restyle gains real detail

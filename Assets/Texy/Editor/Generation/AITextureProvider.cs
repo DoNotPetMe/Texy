@@ -211,6 +211,13 @@ namespace Texy
             "shadow, baked lighting, highlight, gradient lighting, border, frame, watermark, text, signature, " +
             "blurry, lowres, jpeg artifacts, seams, perspective, vignette";
 
+        /// <summary>Built-in quality negatives plus the user's own terms (e.g. to ban dark colors).</summary>
+        private string CombinedNegative()
+        {
+            string user = _settings.AiNegativePrompt;
+            return string.IsNullOrWhiteSpace(user) ? TextureNegativePrompt : TextureNegativePrompt + ", " + user.Trim();
+        }
+
         private string BuildRequestBody(string prompt, int size, bool tileable, string initImageBase64)
         {
             string escaped = EscapeJson(prompt);
@@ -225,7 +232,7 @@ namespace Texy
                            $"\"denoising_strength\":{F(_settings.AiDenoise)}," +
                            $"\"resize_mode\":0," +
                            $"\"prompt\":\"{escaped}\"," +
-                           $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
+                           $"\"negative_prompt\":\"{EscapeJson(CombinedNegative())}\"," +
                            $"\"steps\":{_settings.AiSteps},\"cfg_scale\":{F(_settings.AiCfgScale)},\"sampler_name\":\"Euler a\"," +
                            $"\"width\":{size},\"height\":{size}" +
                            ControlNetFragment(initImageBase64) +
@@ -236,7 +243,7 @@ namespace Texy
                 // avatar body/clothing atlases need. "Euler a" is universally available across versions.
                 return "{" +
                        $"\"prompt\":\"{escaped}\"," +
-                       $"\"negative_prompt\":\"{TextureNegativePrompt}\"," +
+                       $"\"negative_prompt\":\"{EscapeJson(CombinedNegative())}\"," +
                        $"\"steps\":{_settings.AiSteps},\"cfg_scale\":{F(_settings.AiCfgScale)},\"sampler_name\":\"Euler a\"," +
                        $"\"tiling\":{(tileable ? "true" : "false")}," +
                        $"\"width\":{size},\"height\":{size}" +
