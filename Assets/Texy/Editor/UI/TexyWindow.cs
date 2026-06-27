@@ -333,6 +333,12 @@ namespace Texy
                             else
                                 EditorGUILayout.LabelField($"Base: {src.name} ({src.width}×{src.height}).", TexyStyles.Hint);
 
+                            _settings.AiMaskToUV = EditorGUILayout.Toggle(
+                                new GUIContent("Keep padding clean (UV mask)", "Restore the original texture outside the UV islands so the model can't paint the blank background. Requires the mesh assigned via Analyze Geometry."),
+                                _settings.AiMaskToUV);
+                            if (_settings.AiMaskToUV && _meshContext == null)
+                                EditorGUILayout.HelpBox("Assign the Avatar Mesh and click Analyze Geometry so Texy knows the UV islands.", MessageType.Warning);
+
                             DrawControlNetUI();
                         }
 

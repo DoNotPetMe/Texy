@@ -54,6 +54,7 @@ namespace Texy
                     onProgress,
                     albedo =>
                     {
+                        albedo = ApplyUVMask(albedo, request);
                         onProgress?.Invoke(0.75f, "Deriving " + MapTypeInfo.DisplayName(request.MapType) + "...");
                         Texture2D derived = Derive(request, style, albedo);
                         UnityEngine.Object.DestroyImmediate(albedo);
@@ -74,6 +75,8 @@ namespace Texy
                 {
                     if (request.MapType == MapType.Decal)
                         tex = LuminanceToAlpha(tex);
+                    else if (request.MapType == MapType.Albedo)
+                        tex = ApplyUVMask(tex, request);
                     onComplete?.Invoke(TextureResult.Ok(tex, request.MapType, Name));
                 },
                 err => onComplete?.Invoke(TextureResult.Fail(err, request.MapType, Name)));
@@ -363,6 +366,41 @@ namespace Texy
         {
             var pixels = MapPostProcessor.ReadResized(src, w, h);
             return Finalize(pixels, w, h, linear: false, alpha: true);
+        }
+
+        /// <summary>
+        /// Restore the original texture outside the avatar's UV islands, so the model's invented padding
+        /// can't bleed at seams. No-op without a mesh + source (then we have nothing reliable to mask to).
+        /// </summary>
+        private Texture2D ApplyUVMask(Texture2D ai, TextureRequest req)
+        {
+            if (ai == null || !_settings.AiMaskToUV || req.Mesh == null || req.SourceAlbedo == null)
+                return ai;
+
+            int w = ai.width, h = ai.height;
+            int ms = Mathf.Clamp(Mathf.Max(w, h), 256, 1024); // coverage mask resolution (capped for speed)
+            var maps = UVIslandMapper.Build(req.Mesh, ms);
+
+            var aiPx = ai.GetPixels();
+            var srcPx = MapPostProcessor.ReadResized(req.SourceAlbedo, w, h);
+
+            for (int y = 0; y < h; y++)
+            {
+                int my = Mathf.Clamp((int)((float)y / h * ms), 0, ms - 1);
+                for (int x = 0; x < w; x++)
+                {
+                    int mx = Mathf.Clamp((int)((float)x / w * ms), 0, ms - 1);
+                    if (maps.SampleCoverage(mx, my) < 0.5f)
+                        aiPx[y * w + x] = srcPx[y * w + x]; // outside an island → keep original
+                }
+            }
+
+            var outTex = new Texture2D(w, h, TextureFormat.RGBA32, true, false);
+            outTex.wrapMode = TextureWrapMode.Repeat;
+            outTex.SetPixels(aiPx);
+            outTex.Apply(true);
+            UnityEngine.Object.DestroyImmediate(ai);
+            return outTex;
         }
 
         /// <summary>For decals from models that paint on black: turn black areas transparent.</summary>

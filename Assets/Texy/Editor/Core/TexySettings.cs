@@ -40,6 +40,9 @@ namespace Texy
         public int AiSteps = 30;
         // User-added negative terms, appended to the built-in quality negative. e.g. "dark, black, gloomy".
         public string AiNegativePrompt = string.Empty;
+        // Restore the original texture outside the avatar's UV islands so the model can't paint the
+        // blank padding (which otherwise bleeds at seams). Requires the mesh to be assigned/analyzed.
+        public bool AiMaskToUV = true;
 
         // ---- ControlNet (sd-webui-controlnet extension) ----
         // Locks the source structure while allowing high denoise, so the restyle gains real detail
